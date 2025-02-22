@@ -1,34 +1,184 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>US Population Density Map</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+  <meta charset="utf-8">
+  <title>Interactive Web Mapping</title>
+  <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+  <link href="https://api.mapbox.com/mapbox-gl-js/v2.5.0/mapbox-gl.css" rel="stylesheet">
+  <script src="https://api.mapbox.com/mapbox-gl-js/v2.5.0/mapbox-gl.js"></script>
+  <style>
+    /* Basic text styling */
+    h2, h3 {
+      margin: 10px;
+      font-size: 18px;
+    }
+    h3 {
+      font-size: 16px;
+    }
+    p {
+      margin: 10px;
+    }
+    /* Map container */
+    #map {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      width: 100%;
+    }
+    /* Map overlay styles for title and legend */
+    .map-overlay {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      background: rgba(255, 255, 255, 0.8);
+      border-style: solid;
+      border-width: 1px;
+      border-color: rgba(0, 0, 0, 0.2);
+      margin-left: 20px;
+      font-family: Arial, sans-serif;
+      overflow: auto;
+      border-radius: 3px;
+    }
+    #features {
+      top: 0;
+      height: 100px;
+      margin-top: 20px;
+      width: 250px;
+    }
+    #legend {
+      padding: 10px;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+      line-height: 18px;
+      height: 210px;
+      margin-bottom: 40px;
+      width: 150px;
+    }
+    .legend-key {
+      display: inline-block;
+      border-radius: 20%;
+      width: 10px;
+      height: 10px;
+      margin-right: 5px;
+    }
+    /* Fix for cursor appearance */
+    .mapboxgl-canvas-container.mapboxgl-interactive,
+    .mapboxgl-ctrl-group button.mapboxgl-ctrl-compass {
+      cursor: unset;
+    }
+  </style>
 </head>
 <body>
-    <h1>US Population Density Map</h1>
-    <div id="map" style="height: 500px;"></div>
+  <!-- Map placeholder -->
+  <div id="map"></div>
+  <!-- Information overlay for title and hover details -->
+  <div class="map-overlay" id="features">
+    <h2>US population density</h2>
+    <div id="text-description">
+      <p>Hover over a state!</p>
+    </div>
+  </div>
+  <!-- Legend overlay -->
+  <div class="map-overlay" id="legend"></div>
+  
+  <script>
+    // Set your Mapbox access token
+    mapboxgl.accessToken = 'pk.eyJ1IjoiamFrb2J6aGFvIiwiYSI6ImNpcms2YWsyMzAwMmtmbG5icTFxZ3ZkdncifQ.P9MBej1xacybKcDN_jehvw';
+    
+    // Create the map instance centered over the contiguous U.S.
+    const map = new mapboxgl.Map({
+      container: 'map',
+      style: 'mapbox://styles/mapbox/light-v10',
+      zoom: 3,
+      center: [-100, 40]
+    });
 
-    <script>
-        var map = L.map('map').setView([37.8, -96], 4); // Center of US
+    // Async function to load GeoJSON data and add map layers/legend
+    async function geojsonFetch() {
+      // Load the GeoJSON file containing state data
+      let response = await fetch('assets/stateData.geojson');
+      let stateData = await response.json();
 
-        // Load base map
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap contributors'
-        }).addTo(map);
+      // When the map style has finished loading...
+      map.on('load', function loadingData() {
+        // Add the GeoJSON as a data source
+        map.addSource('stateData', {
+          type: 'geojson',
+          data: stateData
+        });
 
-        // Load GeoJSON data
-        fetch('assets/stateData.geojson')
-            .then(response => response.json())
-            .then(data => {
-                L.geoJSON(data, {
-                    style: function (feature) {
-                        return { color: "blue", weight: 1, fillOpacity: 0.5 };
-                    }
-                }).addTo(map);
-            });
-    </script>
+        // Add a fill layer with colors based on the 'density' property
+        map.addLayer({
+          'id': 'stateData-layer',
+          'type': 'fill',
+          'source': 'stateData',
+          'paint': {
+            'fill-color': [
+              'step',
+              ['get', 'density'],
+              '#FFEDA0',   // density < 10
+              10, '#FED976',   // 10 <= density < 20
+              20, '#FEB24C',   // 20 <= density < 50
+              50, '#FD8D3C',   // 50 <= density < 100
+              100, '#FC4E2A',  // 100 <= density < 200
+              200, '#E31A1C',  // 200 <= density < 500
+              500, '#BD0026',  // 500 <= density < 1000
+              1000, "#800026"  // density >= 1000
+            ],
+            'fill-outline-color': '#BBBBBB',
+            'fill-opacity': 0.7
+          }
+        });
+
+        // Create legend intervals and corresponding colors (with alpha values)
+        const layers = [
+          '0-9',
+          '10-19',
+          '20-49',
+          '50-99',
+          '100-199',
+          '200-499',
+          '500-999',
+          '1000 and more'
+        ];
+        const colors = [
+          '#FFEDA070',
+          '#FED97670',
+          '#FEB24C70',
+          '#FD8D3C70',
+          '#FC4E2A70',
+          '#E31A1C70',
+          '#BD002670',
+          '#80002670'
+        ];
+
+        // Add legend title and each legend entry
+        const legend = document.getElementById('legend');
+        legend.innerHTML = "<b>Population Density<br>(people/sq.mi.)</b><br><br>";
+        layers.forEach((layer, i) => {
+          const color = colors[i];
+          const item = document.createElement('div');
+          const key = document.createElement('span');
+          key.className = 'legend-key';
+          key.style.backgroundColor = color;
+          const value = document.createElement('span');
+          value.innerHTML = `${layer}`;
+          item.appendChild(key);
+          item.appendChild(value);
+          legend.appendChild(item);
+        });
+
+        // Add a mousemove listener to update the information overlay when hovering over a state
+        map.on('mousemove', ({ point }) => {
+          const state = map.queryRenderedFeatures(point, { layers: ['stateData-layer'] });
+          document.getElementById('text-description').innerHTML = state.length ?
+            `<h3>${state[0].properties.name}</h3><p><strong><em>${state[0].properties.density}</strong> people per square mile</em></p>` :
+            `<p>Hover over a state!</p>`;
+        });
+      });
+    }
+    geojsonFetch();
+  </script>
 </body>
 </html>
